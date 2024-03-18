@@ -1,4 +1,9 @@
-import { Field, SmartContract, state, State, method } from 'o1js';
+import { Field, SmartContract, state, State, method, ZkProgram } from 'o1js';
+import { Controller } from './GameLogic/Controller.js';
+
+const { verificationKey } = await Controller.compile();
+
+export class ZnakeProof extends ZkProgram.Proof(Controller) {}
 
 /**
  * Basic Example

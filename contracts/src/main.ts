@@ -17,6 +17,7 @@ import {
 import {
     Controller
 } from "./GameLogic/Controller.js"
+import { GameField } from './GameLogic/GameField.js';
 
 const useProof = false;
 
@@ -42,11 +43,18 @@ await deployTxn.sign([deployerKey, zkAppPrivateKey]).send();
 
 console.log("Initializing ZkCab");
 
-const { verificationKey } = await Controller.compile();
+const gameField = GameField.create(senderAccount);
+console.log(gameField.player.toBase58());
 
-let proof = await Controller.startGame(Field(100), senderAccount);
+for (let index = 0; index < 5; index++) {
+    gameField.snake.move();
+    console.log(gameField.snake.coordinates[0].x.toString() + " " + gameField.snake.coordinates[0].y.toString());
+}
+
+let proof = await Controller.startGame(Field(100), senderAccount, gameField);
+console.log(proof.toJSON());
 
 for (let index = 0; index < 3; index++) {
     proof = await Controller.move(Field(100), proof);
-    console.log(proof.publicOutput.snake.coordinates[0].x.toString(), proof.publicOutput.snake.coordinates[0].y.toString());
+    console.log(proof.toJSON());
 }
