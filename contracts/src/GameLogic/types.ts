@@ -1,4 +1,4 @@
-import { Bool, Field, Provable, Struct, UInt32, provable, provablePure } from "o1js";
+import { Bool, Field, Provable, Struct, UInt32, assert, provable, provablePure } from "o1js";
 
 const GAME_WIDTH = 10;
 const GAME_HEIGHT = 10;
@@ -30,7 +30,8 @@ export class Coordinate extends Struct({
 export class Snake extends Struct({
     direction: UInt32,
     length: UInt32,
-    coordinates: Provable.Array(Coordinate, MAX_SNAKE_SIZE)
+    coordinates: Provable.Array(Coordinate, MAX_SNAKE_SIZE),
+    gameOver: Bool
 }) {
     static create() {
         return new Snake({
@@ -38,9 +39,10 @@ export class Snake extends Struct({
             length: UInt32.from(BODY_PARTS),
             coordinates: [...new Array(MAX_SNAKE_SIZE)].map(
                 () => {
-                    return Coordinate.from(0, 0);
+                    return Coordinate.from(1, 1);
                 }
-            )
+            ),
+            gameOver: Bool(false)
         });
     }
 
@@ -58,10 +60,10 @@ export class Snake extends Struct({
         // Directions are represented as follows:
         // 0: Up, 1: Right, 2: Down, 3: Left
 
+        assert(this.gameOver.equals(false), "Game is over");
+
         let initialX = this.coordinates[0].x;
         let initialY = this.coordinates[0].y;
-        
-        Provable.log(this.direction.equals(UP))
 
         initialY = Provable.if(
             this.direction.equals(UP),
@@ -90,9 +92,12 @@ export class Snake extends Struct({
         let newCoordinate = new Coordinate({ x: initialX, y: initialY });
         
         // First, move the tail
-        for (let i = 0; i > MAX_SNAKE_SIZE; i++) {
+        for (let i = 0; i < MAX_SNAKE_SIZE; i++) {
             const index = UInt32.from(i);
-            const oldCoordinate = this.coordinates[i];
+            const oldCoordinate = new Coordinate({
+                x: this.coordinates[i].x,
+                y: this.coordinates[i].y
+            });
 
             this.coordinates[i].x = Provable.if(
                 index.lessThan(this.length),
@@ -106,7 +111,57 @@ export class Snake extends Struct({
                 this.coordinates[i].y
             );
 
-            newCoordinate = oldCoordinate;
+            newCoordinate.x = oldCoordinate.x;
+            newCoordinate.y = oldCoordinate.y;
         }
+
+        this.checkGameOver();
+    }
+
+    changeDirection(newDirection: UInt32) {
+        this.direction = Provable.if(
+            newDirection.equals(UP).and(this.direction.equals(DOWN).not()),
+            newDirection,
+            this.direction
+        );
+
+        this.direction = Provable.if(
+            newDirection.equals(DOWN).and(this.direction.equals(UP).not()),
+            newDirection,
+            this.direction
+        );
+
+        this.direction = Provable.if(
+            newDirection.equals(LEFT).and(this.direction.equals(RIGHT).not()),
+            newDirection,
+            this.direction
+        );
+
+        this.direction = Provable.if(
+            newDirection.equals(RIGHT).and(this.direction.equals(LEFT).not()),
+            newDirection,
+            this.direction
+        );
+    }
+
+    grow() {
+        this.length = this.length.add(1);
+    }
+
+    checkGameOver() {
+        let head = this.coordinates[0];
+
+        const outOfBounds = head.x.greaterThanOrEqual(UInt32.from(GAME_WIDTH))
+            .or(head.x.lessThanOrEqual(UInt32.zero))
+            .or(head.y.greaterThanOrEqual(UInt32.from(GAME_HEIGHT)))
+            .or(head.y.lessThanOrEqual(UInt32.zero));
+
+        this.gameOver = outOfBounds.or(this.selfCollision());
+    }
+
+    selfCollision() {
+        // check self collision
+
+        return Bool(false);
     }
 }
