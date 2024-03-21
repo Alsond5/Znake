@@ -1,7 +1,7 @@
 import { Bool, Field, Provable, Struct, UInt32, assert, provable, provablePure } from "o1js";
 
-const GAME_WIDTH = 10;
-const GAME_HEIGHT = 10;
+const GAME_WIDTH = 15;
+const GAME_HEIGHT = 15;
 const SPEED = 50;
 const MAX_SNAKE_SIZE = GAME_WIDTH * GAME_HEIGHT;
 const BODY_PARTS = 3;
@@ -28,119 +28,102 @@ export class Coordinate extends Struct({
 }
 
 export class Snake extends Struct({
-    direction: UInt32,
+    moveDirection: UInt32,
     length: UInt32,
-    coordinates: Provable.Array(Coordinate, MAX_SNAKE_SIZE),
+    plane: Field,
+    direction: Field,
+    headCoordinate: Coordinate,
     gameOver: Bool
 }) {
     static create() {
         return new Snake({
-            direction: UInt32.one,
+            moveDirection: UInt32.one,
             length: UInt32.from(BODY_PARTS),
-            coordinates: [...new Array(MAX_SNAKE_SIZE)].map(
-                () => {
-                    return Coordinate.from(1, 1);
-                }
-            ),
+            plane: Field.empty(),
+            direction: Field.empty(),
+            headCoordinate: Coordinate.from(1, 1),
             gameOver: Bool(false)
         });
     }
 
     checkInitialState() {
-        this.direction.assertEquals(UInt32.from(1));
+        this.moveDirection.assertEquals(UInt32.from(1));
         this.length.assertEquals(UInt32.from(BODY_PARTS));
-
-        for (let i = 0; i < MAX_SNAKE_SIZE; i++) {
-            this.coordinates[i].x.assertEquals(UInt32.one);
-            this.coordinates[i].y.assertEquals(UInt32.one);
-        }
+        this.plane.assertEquals(0);
+        this.direction.assertEquals(0);
+        this.gameOver.assertEquals(false);
     }
 
     move() {
-        // Directions are represented as follows:
-        // 0: Up, 1: Right, 2: Down, 3: Left
+        // plane: 0 => x, 1 => y    direction 0 => -, 1 => +
 
-        assert(this.gameOver.equals(false), "Game is over");
+        assert(this.gameOver.equals(false), "Game is over!");
 
-        let initialX = this.coordinates[0].x;
-        let initialY = this.coordinates[0].y;
+        const planeBits = this.plane.toBits(MAX_SNAKE_SIZE).reverse();
+        const directionBits = this.direction.toBits(MAX_SNAKE_SIZE).reverse();
 
-        initialY = Provable.if(
-            this.direction.equals(UP),
-            initialY.sub(1),
-            initialY
-        );
-
-        initialY = Provable.if(
-            this.direction.equals(DOWN),
-            initialY.add(1),
-            initialY
-        );
-
-        initialX = Provable.if(
-            this.direction.equals(LEFT),
-            initialX.sub(1),
-            initialX
-        );
-
-        initialX = Provable.if(
-            this.direction.equals(RIGHT),
-            initialX.add(1),
-            initialX
-        );
-
-        let newCoordinate = new Coordinate({ x: initialX, y: initialY });
+        let newPlaneBit = this.moveDirection.equals(UP).or(this.moveDirection.equals(DOWN));
+        let newDirectionBit = this.moveDirection.equals(UP).or(this.moveDirection.equals(LEFT));
         
-        // First, move the tail
-        for (let i = 0; i < MAX_SNAKE_SIZE; i++) {
-            const index = UInt32.from(i);
-            const oldCoordinate = new Coordinate({
-                x: this.coordinates[i].x,
-                y: this.coordinates[i].y
-            });
+        for (let index = 0; index < MAX_SNAKE_SIZE; index++) {
+            const oldPlaneBit = new Bool(planeBits[index]);
+            const oldDirectionBit = new Bool(directionBits[index]);
 
-            this.coordinates[i].x = Provable.if(
-                index.lessThan(this.length),
-                newCoordinate.x,
-                this.coordinates[i].x
-            );
+            planeBits[index] = newPlaneBit.and(UInt32.from(index).lessThan(this.length.sub(1)));
+            directionBits[index] = newDirectionBit.and(UInt32.from(index).lessThan(this.length.sub(1)));
 
-            this.coordinates[i].y = Provable.if(
-                index.lessThan(this.length),
-                newCoordinate.y,
-                this.coordinates[i].y
-            );
-
-            newCoordinate.x = oldCoordinate.x;
-            newCoordinate.y = oldCoordinate.y;
+            newPlaneBit = oldPlaneBit; 
+            newDirectionBit = oldDirectionBit;
         }
 
+        this.plane = Field.fromBits(planeBits.reverse());
+        this.direction = Field.fromBits(directionBits.reverse());
+
+        let initialX = this.headCoordinate.x;
+        let initialY = this.headCoordinate.y;
+
+        const isDirectionUp = UInt32.from(this.moveDirection.equals(UP).toField());
+        const isDirectionDown = UInt32.from(this.moveDirection.equals(DOWN).toField());
+        const isDirectionLeft = UInt32.from(this.moveDirection.equals(LEFT).toField());
+        const isDirectionRight = UInt32.from(this.moveDirection.equals(RIGHT).toField());
+
+        const addedY = UInt32.MAXINT().mul(isDirectionUp).addMod32(isDirectionDown);
+        const addedX = UInt32.MAXINT().mul(isDirectionLeft).addMod32(isDirectionRight);
+
+        initialY = initialY.addMod32(addedY);
+        initialX = initialX.addMod32(addedX);
+
+        this.headCoordinate = new Coordinate({
+            x: initialX,
+            y: initialY
+        });
+        
         this.checkGameOver();
     }
 
     changeDirection(newDirection: UInt32) {
-        this.direction = Provable.if(
-            newDirection.equals(UP).and(this.direction.equals(DOWN).not()),
+        this.moveDirection = Provable.if(
+            newDirection.equals(UP).and(this.moveDirection.equals(DOWN).not()),
             newDirection,
-            this.direction
+            this.moveDirection
         );
 
-        this.direction = Provable.if(
-            newDirection.equals(DOWN).and(this.direction.equals(UP).not()),
+        this.moveDirection = Provable.if(
+            newDirection.equals(DOWN).and(this.moveDirection.equals(UP).not()),
             newDirection,
-            this.direction
+            this.moveDirection
         );
 
-        this.direction = Provable.if(
-            newDirection.equals(LEFT).and(this.direction.equals(RIGHT).not()),
+        this.moveDirection = Provable.if(
+            newDirection.equals(LEFT).and(this.moveDirection.equals(RIGHT).not()),
             newDirection,
-            this.direction
+            this.moveDirection
         );
 
-        this.direction = Provable.if(
-            newDirection.equals(RIGHT).and(this.direction.equals(LEFT).not()),
+        this.moveDirection = Provable.if(
+            newDirection.equals(RIGHT).and(this.moveDirection.equals(LEFT).not()),
             newDirection,
-            this.direction
+            this.moveDirection
         );
     }
 
@@ -149,14 +132,16 @@ export class Snake extends Struct({
     }
 
     checkGameOver() {
-        let head = this.coordinates[0];
+        let head = this.headCoordinate;
 
-        const outOfBounds = head.x.greaterThanOrEqual(UInt32.from(GAME_WIDTH))
-            .or(head.x.lessThanOrEqual(UInt32.zero))
-            .or(head.y.greaterThanOrEqual(UInt32.from(GAME_HEIGHT)))
-            .or(head.y.lessThanOrEqual(UInt32.zero));
+        const outOfBounds = head.x.greaterThan(UInt32.from(GAME_WIDTH))
+            .or(head.y.greaterThan(UInt32.from(GAME_HEIGHT)))
+
+        Provable.log(outOfBounds)
 
         this.gameOver = outOfBounds.or(this.selfCollision());
+
+        assert(this.gameOver.equals(false), "Game is over!");
     }
 
     selfCollision() {
@@ -164,4 +149,36 @@ export class Snake extends Struct({
 
         return Bool(false);
     }
+}
+
+export function getCoordinates(snake: Snake) {
+    let oldCoordinate = new Coordinate({
+        x: snake.headCoordinate.x,
+        y: snake.headCoordinate.y
+    });
+
+    const coordinates: Coordinate[] = [oldCoordinate];
+
+    const planeBits = snake.plane.toBits(MAX_SNAKE_SIZE).reverse();
+    const directionBits = snake.direction.toBits(MAX_SNAKE_SIZE).reverse();
+
+    for (let i = 0; UInt32.from(i).lessThan(snake.length.sub(1)).toBoolean(); i++) {
+        let x = oldCoordinate.x;
+        let y = oldCoordinate.y;
+
+        if (planeBits[i].toBoolean()) {
+            y = (directionBits[i].toBoolean()) ? y.add(1) : y.sub(1);
+        } else {
+            x = (directionBits[i].toBoolean()) ? x.add(1) : x.sub(1);
+        }
+
+        oldCoordinate = new Coordinate({
+            x: x,
+            y: y
+        });
+
+        coordinates.push(oldCoordinate);
+    }
+
+    return coordinates;
 }

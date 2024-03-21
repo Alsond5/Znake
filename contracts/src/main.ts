@@ -19,7 +19,7 @@ import {
 } from "./GameLogic/Controller.js"
 import { GameField } from './GameLogic/GameField.js';
 import readline from "readline";
-import { DOWN, LEFT, RIGHT, UP } from './GameLogic/types.js';
+import { DOWN, getCoordinates, LEFT, RIGHT, UP } from './GameLogic/types.js';
 
 const useProof = false;
 
@@ -46,11 +46,11 @@ await deployTxn.sign([deployerKey, zkAppPrivateKey]).send();
 console.log("Initializing ZkCab");
 
 function draw(gameField: GameField) {
-    const width = 10;
-    const height = 10;
+    const width = 15;
+    const height = 15;
 
     const snake = gameField.snake;
-    const snakeCoordinates = snake.coordinates;
+    const snakeCoordinates = getCoordinates(snake);
 
     console.clear();
 
@@ -80,7 +80,7 @@ console.log(gameField.player.toBase58());
 setInterval(() => {
     gameField.snake.move();
     draw(gameField);
-    // console.log(gameField.snake.coordinates.forEach(value => console.log(value.x + "," + value.y)))
+    console.log({ x: gameField.snake.headCoordinate.x.toString(), y: gameField.snake.headCoordinate.y.toString() })
 }, 100);
 
 console.log("girdi3");
@@ -92,6 +92,7 @@ process.stdin.on("keypress", (ch, key) => {
     if (key && key.name === "down") gameField.snake.changeDirection(DOWN);
     if (key && key.name === "right") gameField.snake.changeDirection(RIGHT);
     if (key && key.name === "left") gameField.snake.changeDirection(LEFT);
+    if (key && key.name === "c" && key.ctrl) process.exit();
 })
 
 process.stdin.setRawMode(true);
