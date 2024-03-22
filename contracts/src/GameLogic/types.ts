@@ -41,7 +41,7 @@ export class Snake extends Struct({
             length: UInt32.from(BODY_PARTS),
             plane: Field.empty(),
             direction: Field.empty(),
-            headCoordinate: Coordinate.from(1, 1),
+            headCoordinate: Coordinate.from(2, 2),
             gameOver: Bool(false)
         });
     }
@@ -54,7 +54,7 @@ export class Snake extends Struct({
         this.gameOver.assertEquals(false);
     }
 
-    move() {
+    move(food: Food) {
         // plane: 0 => x, 1 => y    direction 0 => -, 1 => +
 
         assert(this.gameOver.equals(false), "Game is over!");
@@ -64,6 +64,9 @@ export class Snake extends Struct({
 
         let newPlaneBit = this.moveDirection.equals(UP).or(this.moveDirection.equals(DOWN));
         let newDirectionBit = this.moveDirection.equals(UP).or(this.moveDirection.equals(LEFT));
+
+        const didSnakeEatFood = food.checkSnakeCollision(this).toField().rangeCheckHelper(32);
+        this.length = this.length.add(UInt32.from(didSnakeEatFood));
         
         for (let index = 0; index < MAX_SNAKE_SIZE; index++) {
             const oldPlaneBit = new Bool(planeBits[index]);
@@ -134,10 +137,8 @@ export class Snake extends Struct({
     checkGameOver() {
         let head = this.headCoordinate;
 
-        const outOfBounds = head.x.greaterThan(UInt32.from(GAME_WIDTH))
-            .or(head.y.greaterThan(UInt32.from(GAME_HEIGHT)))
-
-        Provable.log(outOfBounds)
+        const outOfBounds = head.x.greaterThanOrEqual(UInt32.from(GAME_WIDTH))
+            .or(head.y.greaterThanOrEqual(UInt32.from(GAME_HEIGHT)))
 
         this.gameOver = outOfBounds.or(this.selfCollision());
 
@@ -145,9 +146,85 @@ export class Snake extends Struct({
     }
 
     selfCollision() {
-        // check self collision
+        // check self collision,
 
-        return Bool(false);
+        const planeBits = this.plane.toBits(MAX_SNAKE_SIZE).reverse();
+        const directionBits = this.direction.toBits(MAX_SNAKE_SIZE).reverse();
+
+        const head = this.headCoordinate;
+
+        let oldCoordinate = new Coordinate({
+            x: this.headCoordinate.x,
+            y: this.headCoordinate.y
+        });
+    
+        let collision = Bool(false);
+
+        for (let i = 0; i < MAX_SNAKE_SIZE; i++) {
+            let x = oldCoordinate.x;
+            let y = oldCoordinate.y;
+
+            x = Provable.if(
+                UInt32.from(i).lessThan(this.length.sub(1)),
+                UInt32.from(planeBits[i].not().toField().rangeCheckHelper(32)).mul(UInt32.from(directionBits[i].toField().rangeCheckHelper(32)).mul(2).addMod32(UInt32.MAXINT())).addMod32(x),
+                x
+            );
+
+            y = Provable.if(
+                UInt32.from(i).lessThan(this.length.sub(1)),
+                UInt32.from(planeBits[i].toField().rangeCheckHelper(32)).mul(UInt32.from(directionBits[i].toField().rangeCheckHelper(32)).mul(2).addMod32(UInt32.MAXINT())).addMod32(y),
+                y
+            );
+    
+            oldCoordinate = new Coordinate({
+                x: x,
+                y: y
+            });
+
+            collision = collision.or(oldCoordinate.equals(head));
+        }
+
+        return collision;
+    }
+}
+
+export class Food extends Struct({
+    coordinate: Coordinate,
+    eaten: Bool
+}) {
+    static create() {
+        let x = UInt32.from(Field.random().rangeCheckHelper(32));
+        let y = UInt32.from(Field.random().rangeCheckHelper(32));
+
+        return new Food({
+            coordinate: new Coordinate({
+                x: x.mod(GAME_WIDTH),
+                y: y.mod(GAME_HEIGHT)
+            }),
+            eaten: Bool(false)
+        });
+    }
+
+    checkInitialState() {
+        this.eaten.assertEquals(false);
+    }
+    
+    checkSnakeCollision(snake: Snake) {
+        this.eaten = new Bool(snake.headCoordinate.equals(this.coordinate));
+
+        return this.eaten;
+    }
+
+    respawn() {
+        let x = UInt32.from(Field.random().rangeCheckHelper(32));
+        let y = UInt32.from(Field.random().rangeCheckHelper(32));
+
+        this.coordinate = new Coordinate({
+            x: x.mod(GAME_WIDTH),
+            y: y.mod(GAME_HEIGHT)
+        });
+
+        this.eaten = Bool(false);
     }
 }
 

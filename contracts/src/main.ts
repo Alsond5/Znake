@@ -50,6 +50,7 @@ function draw(gameField: GameField) {
     const height = 15;
 
     const snake = gameField.snake;
+    const food = gameField.food.coordinate;
     const snakeCoordinates = getCoordinates(snake);
 
     console.clear();
@@ -65,6 +66,9 @@ function draw(gameField: GameField) {
                     cell = '*';
                 }
             }
+            if (food.x.equals(UInt32.from(x)).and(food.y.equals(UInt32.from(y))).toBoolean()) {
+                cell = 'O';
+            }
             row += cell;
         }
         row += "#";
@@ -78,10 +82,19 @@ const gameField = GameField.create(senderAccount);
 console.log(gameField.player.toBase58());
 
 setInterval(() => {
-    gameField.snake.move();
+    gameField.snake.move(gameField.food);
+    const didScoreIncrease = gameField.incrementScoreIfSnakeEatFood();
+
+    if (didScoreIncrease.toBoolean()) {
+        gameField.food.respawn();
+    }
+
     draw(gameField);
     console.log({ x: gameField.snake.headCoordinate.x.toString(), y: gameField.snake.headCoordinate.y.toString() })
-}, 100);
+    console.log({ x: gameField.food.coordinate.x.toString(), y: gameField.food.coordinate.y.toString() })
+    console.log({ score: gameField.score.toString() })
+    console.log({ length: gameField.snake.length.toString() })
+}, 1000);
 
 console.log("girdi3");
 
