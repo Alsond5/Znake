@@ -78,8 +78,18 @@ function draw(gameField: GameField) {
     console.log("#".repeat(width + 2));
 }
 
-const gameField = GameField.create(senderAccount);
+const merkle = new MerkleMap();
+
+const hashedPlayerAddress = Poseidon.hash(senderAccount.toFields());
+
+merkle.set(hashedPlayerAddress, Field(0));
+
+const initialRoot = merkle.getRoot();
+
+const gameField = GameField.create(senderAccount, initialRoot);
 console.log(gameField.player.toBase58());
+
+let proof = await Controller.startGame(initialRoot, senderAccount, gameField, merkle.getWitness(hashedPlayerAddress));
 
 setInterval(() => {
     gameField.snake.move(gameField.food);
@@ -90,11 +100,11 @@ setInterval(() => {
     }
 
     draw(gameField);
-    console.log({ x: gameField.snake.headCoordinate.x.toString(), y: gameField.snake.headCoordinate.y.toString() })
-    console.log({ x: gameField.food.coordinate.x.toString(), y: gameField.food.coordinate.y.toString() })
-    console.log({ score: gameField.score.toString() })
-    console.log({ length: gameField.snake.length.toString() })
 }, 1000);
+
+setInterval(async () => {
+    proof = await Controller.proofMove(initialRoot, proof, gameField, merkle.getWitness(hashedPlayerAddress));
+}, 10000)
 
 console.log("girdi3");
 

@@ -142,7 +142,7 @@ export class Snake extends Struct({
 
         this.gameOver = outOfBounds.or(this.selfCollision());
 
-        assert(this.gameOver.equals(false), "Game is over!");
+        return this.gameOver;
     }
 
     selfCollision() {
