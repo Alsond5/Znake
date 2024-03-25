@@ -1,10 +1,10 @@
 import { Bool, Field, Provable, Struct, UInt32, assert, provable, provablePure } from "o1js";
 
-const GAME_WIDTH = 15;
-const GAME_HEIGHT = 15;
-const SPEED = 50;
-const MAX_SNAKE_SIZE = GAME_WIDTH * GAME_HEIGHT;
-const BODY_PARTS = 3;
+export const GAME_WIDTH = 15;
+export const GAME_HEIGHT = 15;
+export const SPEED = 50;
+export const MAX_SNAKE_SIZE = GAME_WIDTH * GAME_HEIGHT;
+export const BODY_PARTS = 3;
 
 export const UP = UInt32.zero;
 export const RIGHT = UInt32.one;
