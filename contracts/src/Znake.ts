@@ -1,30 +1,46 @@
-import { Field, SmartContract, state, State, method, ZkProgram } from 'o1js';
+import { Field, SmartContract, state, State, method, ZkProgram, MerkleMapWitness, UInt32, Poseidon } from 'o1js';
 import { Controller } from './GameLogic/Controller.js';
 
-const { verificationKey } = await Controller.compile();
+export const { verificationKey } = await Controller.compile();
 
 export class ZnakeProof extends ZkProgram.Proof(Controller) {}
 
-/**
- * Basic Example
- * See https://docs.minaprotocol.com/zkapps for more info.
- *
- * The Add contract initializes the state variable 'num' to be a Field(1) value by default when deployed.
- * When the 'update' method is called, the Add contract adds Field(2) to its 'num' contract state.
- *
- * This file is safe to delete and replace with your own contract.
- */
 export class Znake extends SmartContract {
-  @state(Field) num = State<Field>();
+  @state(Field) scores = State<Field>();
 
-  init() {
+  @method initState(initialScores: Field) {
     super.init();
-    this.num.set(Field(1));
+
+    this.scores.set(initialScores);
+  }
+  
+  public getScores(): Field {
+    return this.scores.get();
   }
 
-  @method update() {
-    const currentState = this.num.getAndRequireEquals();
-    const newState = currentState.add(2);
-    this.num.set(newState);
+  @method update(proof: ZnakeProof, witness: MerkleMapWitness, score: UInt32) {
+    proof.verify();
+    
+    const player = proof.publicOutput.player;
+    this.sender.assertEquals(player);
+
+    const currentScores = this.scores.getAndRequireEquals();
+    const initialScores = proof.publicInput;
+
+    currentScores.assertEquals(initialScores);
+    
+    const hashedPlayerAddress = Poseidon.hash(player.toFields());
+    const scoreField = score.toFields()[0];
+
+    const [beforeRoot, key] = witness.computeRootAndKey(scoreField);
+    currentScores.assertEquals(beforeRoot);
+    hashedPlayerAddress.assertEquals(key);
+    
+    const newScore = proof.publicOutput.score;
+    const newScoreField = newScore.toFields()[0];
+
+    const [afterRoot, newKey] = witness.computeRootAndKey(newScoreField);
+
+    this.scores.set(afterRoot);
   }
 }

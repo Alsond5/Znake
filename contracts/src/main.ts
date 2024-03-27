@@ -13,6 +13,8 @@ import {
     MerkleTree,
     CircuitString,
     Int64,
+    Proof,
+    PublicKey,
 } from 'o1js';
 import {
     Controller
@@ -91,8 +93,23 @@ console.log(gameField.player.toBase58());
 
 let proof = await Controller.startGame(initialRoot, senderAccount, gameField, merkle.getWitness(hashedPlayerAddress));
 
-setInterval(() => {
-    gameField.snake.move(gameField.food);
+async function proofTransaction(proof: Proof<Field, GameField>, sender: PublicKey, senderKey: PrivateKey) {
+    const score = gameField.score;
+    proof = await Controller.proofMove(initialRoot, proof, gameField, merkle.getWitness(hashedPlayerAddress));
+
+    const txn = await Mina.transaction(sender, () => {
+        zkAppInstance.update(proof, merkle.getWitness(Poseidon.hash(sender.toFields())), score);
+    });
+    await txn.prove();
+    await txn.sign([senderKey]).send();
+}
+
+setInterval(async () => {
+    try {
+        gameField.snake.move(gameField.food);
+    } catch (error) {
+        await proofTransaction(proof, senderAccount, senderKey);
+    }
     const didScoreIncrease = gameField.incrementScoreIfSnakeEatFood();
 
     if (didScoreIncrease.toBoolean()) {
