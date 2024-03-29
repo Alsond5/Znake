@@ -1,9 +1,12 @@
+"use client"
+
 import SnakeGrid from "@/components/SnakeGrid";
 import { useEffect, useState } from "react";
 
 import './reactCOIServiceWorker';
 import ZkappWorkerClient from './zkappWorkerClient';
 import { PublicKey, Field } from 'o1js';
+import type { GameField } from "../../contracts/src/GameLogic/GameField";
 
 export default function Home() {
   const [state, setState] = useState({
@@ -17,12 +20,22 @@ export default function Home() {
     creatingTransaction: false
   });
 
+  const [gameField, setGameField] = useState(null as null | GameField);
+
   useEffect(() => {
     async function timeout(seconds: number): Promise<void> {
       return new Promise((resolve) => {
         setTimeout(resolve, seconds * 1000);
       });
     }
+
+    (async () => {
+      const { GameField } = await import("../../contracts/build/src/GameLogic/GameField.js");
+      
+      const gameField = GameField.create(state.publicKey!, Field(100));
+
+      setGameField(gameField);
+    })();
 
     (async () => {
       if (!state.hasBeenSetup) {
@@ -64,6 +77,7 @@ export default function Home() {
       <SnakeGrid
         width={15}
         height={15}
+        gameField={gameField!}
       />
     </main>
   );

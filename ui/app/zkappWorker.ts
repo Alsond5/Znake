@@ -1,18 +1,18 @@
-import { Mina, PublicKey, Struct, fetchAccount } from 'o1js';
+import { Field, MerkleMapWitness, Mina, Proof, PublicKey, Struct, UInt32, fetchAccount } from 'o1js';
 
 type Transaction = Awaited<ReturnType<typeof Mina.transaction>>;
 
 // ---------------------------------------------------------------------------------------
 
 import type { Znake } from '../../contracts/src/Znake';
-import type { Snake } from '../../contracts/src/GameLogic/types';
-import type { GameField } from '../../contracts/src/GameLogic/GameField';
+import { Snake } from '../../contracts/src/GameLogic/types';
+import { GameField } from '../../contracts/src/GameLogic/GameField';
 
 const state = {
   Znake: null as null | typeof Znake,
   zkapp: null as null | Znake,
-  snake: null as null | typeof Snake,
-  gameField: null as null | typeof GameField,
+  snake: null as null | Snake,
+  gameField: null as null | GameField,
   transaction: null as null | Transaction
 };
 
@@ -26,13 +26,12 @@ const functions = {
     console.log('Berkeley Instance Created');
     Mina.setActiveInstance(Berkeley);
   },
-  loadContract: async (args: {}) => {
+  loadContract: async (args: { player: PublicKey, initialRoot: Field }) => {
     const { Znake } = await import('../../contracts/build/src/Znake.js');
-    const { Snake } = await import('../../contracts/build/src/GameLogic/types.js');
-    const { GameField } = await import('../../contracts/build/src/GameLogic/GameField.js');
+    
     state.Znake = Znake;
-    state.snake = Snake;
-    state.gameField = GameField;
+    state.snake = Snake.create();
+    state.gameField = GameField.create(args.player, args.initialRoot);
   },
   compileContract: async (args: {}) => {
     await state.Znake!.compile();
@@ -45,13 +44,13 @@ const functions = {
     const publicKey = PublicKey.fromBase58(args.publicKey58);
     state.zkapp = new state.Znake!(publicKey);
   },
-  getNum: async (args: {}) => {
-    const currentNum = await state.zkapp!.num.get();
+  getScores: async (args: {}) => {
+    const currentNum = await state.zkapp!.scores.get();
     return JSON.stringify(currentNum.toJSON());
   },
-  createUpdateTransaction: async (args: {}) => {
+  createUpdateTransaction: async (args: { proof: Proof<Field, GameField>, witness: MerkleMapWitness, score: UInt32 }) => {
     const transaction = await Mina.transaction(() => {
-      state.zkapp!.update();
+      state.zkapp!.update(args.proof, args.witness, args.score);
     });
     state.transaction = transaction;
   },
